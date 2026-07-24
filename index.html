@@ -391,8 +391,35 @@
       <button class="btn-light btn-sm" style="margin-top:6px" onclick="addTeamRow()">＋ 팀원 추가</button>
     </div>
     <div class="modal-foot">
-      <button class="btn-light" onclick="closeModal('teamOverlay')" style="margin-left:auto">취소</button>
-      <button class="btn-primary" onclick="saveTeam()">저장</button>
+      <button class="btn-ghost btn-sm" onclick="openTeamsTemplateSettings()" style="color:var(--brand-deep); border-color:rgba(11,67,147,0.3)">💬 Teams 양식 설정</button>
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button class="btn-light" onclick="closeModal('teamOverlay')">취소</button>
+        <button class="btn-primary" onclick="saveTeam()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Teams Template Settings modal -->
+<div class="overlay" id="teamsTemplateOverlay">
+  <div class="modal" style="max-width:520px">
+    <div class="modal-head">
+      <h2>Teams 하단 호출 문구 설정</h2>
+      <button class="close-x" onclick="closeModal('teamsTemplateOverlay')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="hint" style="margin-bottom:14px">
+        요청자별로 Teams 메시지 맨 하단에 출력될 개별 호출 문구를 작성할 수 있습니다.<br>
+        (예: <b>해당 리뷰에 참여해주실 분은 트래커에서 수락 부탁드립니다!</b>)<br>
+        입력하지 않으면 위의 기본 문구가 자동으로 적용됩니다.
+      </div>
+      <div id="teamsTemplateList" style="display:flex; flex-direction:column; gap:12px;"></div>
+    </div>
+    <div class="modal-foot">
+      <div style="margin-left:auto; display:flex; gap:8px;">
+        <button class="btn-light" onclick="closeModal('teamsTemplateOverlay')">취소</button>
+        <button class="btn-primary" onclick="saveTeamsTemplates()">저장</button>
+      </div>
     </div>
   </div>
 </div>
@@ -525,7 +552,12 @@ function shareToTeams(id){
     const bn = baseName(cleanFile);
     fileInfo = `\n- 파일경로: ${d}\n            ${bn}`;
   }
-  const teamsMsg = `[리뷰 요청] ${r.title}\n- 요청자: ${memberName(r.requester)}\n- 요청일: ${r.reqDate || todayISO()}${r.dueDate ? `\n- 마감일: ${r.dueDate}` : ''}${fileInfo}\n\n해당 리뷰에 참여해주실 분은 트래커에서 수락 부탁드립니다!`;
+  
+  // 요청자의 개별 호출 텍스트 가져오기
+  const reqUser = data.team.find(t => t.id === r.requester);
+  const callText = (reqUser && reqUser.teamsCallText) ? reqUser.teamsCallText : '해당 리뷰에 참여해주실 분은 트래커에서 수락 부탁드립니다!';
+
+  const teamsMsg = `[리뷰 요청] ${r.title}\n- 요청자: ${memberName(r.requester)}\n- 요청일: ${r.reqDate || todayISO()}${r.dueDate ? `\n- 마감일: ${r.dueDate}` : ''}${fileInfo}\n\n${callText}`;
   const appUrl = `msteams:/l/chat/0/0?message=${encodeURIComponent(teamsMsg)}`;
   copyText(teamsMsg, '공유 텍스트 복사 완료! Teams 앱이 열리면 대상 대화방을 선택하고 붙여넣기(Ctrl+V)하세요.');
   window.location.href = appUrl;
@@ -905,21 +937,33 @@ function deleteCurrent(){
 
 /* ---------- team settings ---------- */
 let teamDraft=[];
-function openTeamSettings(){teamDraft=data.team.map(m=>({...m}));renderTeam();document.getElementById('teamOverlay').classList.add('show');}
+function openTeamSettings(){
+  teamDraft=data.team.map(m=>({
+    ...m,
+    teamsCallText: m.teamsCallText !== undefined ? m.teamsCallText : ''
+  }));
+  renderTeam();
+  document.getElementById('teamOverlay').classList.add('show');
+}
 function renderTeam(){
   document.getElementById('teamList').innerHTML=teamDraft.map((m,i)=>`
     <div class="rev-line">
-      <input type="text" value="${esc(m.initial)}" maxlength="2" style="width:46px;text-align:center;font-weight:800;padding:7px;border-radius:var(--r-sm)" oninput="tSet(${i},'initial',this.value)">
+      <input type="text" value="${esc(m.initial)}" placeholder="이니셜" maxlength="2" style="width:55px;text-align:center;font-weight:800;padding:7px;border-radius:var(--r-sm)" oninput="tSet(${i},'initial',this.value)">
       <input type="text" value="${esc(m.name)}" placeholder="이름" style="flex:1;padding:7px 9px;border-radius:var(--r-sm);font-size:13px;font-family:inherit" oninput="tSet(${i},'name',this.value)">
       <button class="icon-btn" onclick="tDel(${i})" title="삭제">✕</button>
     </div>`).join('');
 }
 function tSet(i,k,v){teamDraft[i][k]=v;}
 function tDel(i){if(confirm('이 팀원을 삭제하면 관련 리뷰어 지정도 사라집니다. 계속할까요?')){teamDraft.splice(i,1);renderTeam();}}
-function addTeamRow(){teamDraft.push({id:uid(),initial:'',name:''});renderTeam();}
+function addTeamRow(){teamDraft.push({id:uid(),initial:'',name:'',teamsCallText:''});renderTeam();}
 function saveTeam(){
   const clean=teamDraft.filter(m=>(m.initial||'').trim()||(m.name||'').trim());
-  clean.forEach(m=>{if(!m.id)m.id=uid();m.initial=(m.initial||m.name||'?').trim().slice(0,2);m.name=(m.name||m.initial).trim();});
+  clean.forEach(m=>{
+    if(!m.id)m.id=uid();
+    m.initial=(m.initial||m.name||'?').trim().slice(0,2);
+    m.name=(m.name||m.initial).trim();
+    m.teamsCallText=(m.teamsCallText||'').trim();
+  });
   const ids=clean.map(m=>m.id);
   data.team=clean;
   data.requests.forEach(r=>{
@@ -928,6 +972,24 @@ function saveTeam(){
   });
   if(currentTab!=='all'&&!ids.includes(currentTab))currentTab='all';
   save();closeModal('teamOverlay');render();
+}
+
+/* ---------- teams template settings ---------- */
+function openTeamsTemplateSettings(){
+  closeModal('teamOverlay');
+  renderTeamsTemplates();
+  document.getElementById('teamsTemplateOverlay').classList.add('show');
+}
+function renderTeamsTemplates(){
+  document.getElementById('teamsTemplateList').innerHTML=teamDraft.map((m,i)=>`
+    <div class="rev-line" style="display:flex; flex-direction:column; gap:6px; padding:10px;">
+      <div style="font-weight:700; font-size:13px; color:var(--ink);">${esc(m.name || m.initial)} (${esc(m.initial)})</div>
+      <textarea placeholder="호출 문구 (예: 해당 리뷰에 참여해주실 분은 트래커에서 수락 부탁드립니다!)" style="width:100%; height:54px; font-size:12.5px; font-family:inherit; padding:6px 8px; border-radius:var(--r-sm); resize:vertical;" oninput="tSet(${i},'teamsCallText',this.value)">${esc(m.teamsCallText||'')}</textarea>
+    </div>`).join('');
+}
+function saveTeamsTemplates(){
+  saveTeam();
+  closeModal('teamsTemplateOverlay');
 }
 
 /* ---------- backup ---------- */
