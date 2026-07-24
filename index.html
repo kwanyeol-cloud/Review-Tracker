@@ -573,7 +573,11 @@ function render(){
     return (b.reqDate||'').localeCompare(a.reqDate||'');
   });
 
-  const statsList=currentTab==='all'?list:list.filter(r=>involves(r,currentTab));
+  // 전체 탭에서는 전체 목록을, 개인 탭에서는 본인이 '리뷰어로 참여 중(수락)'인 문서 기준의 통계만 산정하도록 수정
+  const statsList = currentTab === 'all' 
+    ? list 
+    : list.filter(r => (r.reviewers || []).some(x => x.id === currentTab));
+  
   renderStats(statsList);
   renderContent(list);
 }
