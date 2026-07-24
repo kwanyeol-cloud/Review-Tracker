@@ -722,7 +722,11 @@ function toggleRequestDone(reqId){
   if(r.status==='done'){r.status='in_progress';r.completedDate='';render();toast('완료 해제 — 진행중으로 되돌렸습니다');return;}
   const parts=[...(r.reviewers||[]).map(x=>x.status),...(r.externals||[]).map(extStatus)];
   const allDone=parts.length>0&&parts.every(s=>s==='done');
-  if(!allDone&&!confirm('아직 완료되지 않은 리뷰어/외부 피드백이 있습니다.\n그래도 이 요청을 완료로 표시할까요?'))return;
+  if(!allDone&&!confirm('아직 완료되지 않은 리뷰어/외부 피드백이 있습니다.\n완료로 표시하면 미완료된 내부 리뷰어는 리뷰 목록에서 자동 제외됩니다. 계속할까요?'))return;
+  
+  // 미완료(done이 아닌) 내부 리뷰어 자동 제외 처리
+  r.reviewers = (r.reviewers || []).filter(x => x.status === 'done');
+  
   r.status='done';r.completedDate=todayISO();
   render();toast('요청을 완료로 표시했습니다');
 }
