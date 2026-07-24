@@ -7,6 +7,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<!-- Firebase App and Realtime Database SDKs -->
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-database-compat.js"></script>
 <style>
   :root{
     --brand-deep:#0b4393;--brand-light:#00a2e8;
@@ -390,7 +393,24 @@ const STATUS_LABEL={pending:'대기',in_progress:'진행중',done:'완료'};
 const STATUS_CLASS={pending:'s-pending',in_progress:'s-prog',done:'s-done'};
 const EXT_ROLE={dev:'개발자',pm:'PM',etc:'기타'};
 
-let data=load();
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyDyrCXOOmQQ1mZdiKKLnmVwSPX1jCc7Dz8",
+  authDomain: "review-tracker-85ae2.firebaseapp.com",
+  databaseURL: "https://review-tracker-85ae2-default-rtdb.firebaseio.com",
+  projectId: "review-tracker-85ae2",
+  storageBucket: "review-tracker-85ae2.firebasestorage.app",
+  messagingSenderId: "466612852424",
+  appId: "1:466612852424:web:17a11914d9d4be3b4b37fd",
+  measurementId: "G-9MC6Y57JGP"
+};
+
+// Initialize Firebase
+firebase.initializeApp(firebaseConfig);
+const database = firebase.database();
+const dbRef = database.ref('reviewTracker');
+
+let data = { team: [], requests: [] };
 let currentTab='all';
 
 /* ---------- theme ---------- */
@@ -401,38 +421,51 @@ function applyTheme(t){
 }
 function toggleTheme(){applyTheme(document.documentElement.getAttribute('data-theme')==='dark'?'light':'dark');}
 
-function load(){
-  try{const raw=localStorage.getItem(STORE);if(raw)return migrate(JSON.parse(raw));}catch(e){}
-  return {
-    team:[
-      {id:'S',initial:'S',name:'S'},{id:'N',initial:'N',name:'N'},
-      {id:'K',initial:'K',name:'K'},{id:'M',initial:'M',name:'M'},{id:'B',initial:'B',name:'B'}
-    ],
-    requests:[
-      {id:uid(),title:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX)',requester:'N',
-       reqDate:'2026-02-24',dueDate:'2026-03-06',file:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX) February 24, 2026.pdf',
-       status:'in_progress',note:'',
-       reviewers:[{id:'S',status:'done'},{id:'K',status:'in_progress'}],
-       externals:[{id:uid(),role:'pm',name:'홍길동',reqDate:'2026-02-25',feedbackDate:'2026-03-03'}]},
-      {id:uid(),title:'FX Calibration Guide 개정안',requester:'S',
-       reqDate:'2026-03-01',dueDate:'',file:'',status:'in_progress',note:'',
-       reviewers:[{id:'M',status:'in_progress'}],
-       externals:[{id:uid(),role:'dev',name:'개발2팀',reqDate:'2026-03-02',feedbackDate:''}]}
-    ]
-  };
-}
 function migrate(d){
   d.team=d.team||d.reviewers||[];
-  (d.requests||[]).forEach(r=>{
+  d.requests=d.requests||[];
+  d.requests.forEach(r=>{
     r.externals=r.externals||[];
     r.reviewers=(r.reviewers||[]).filter(x=>d.team.some(t=>t.id===x.id));
     r.reviewers.forEach(x=>{if(x.acceptedDate===undefined)x.acceptedDate='';if(x.doneDate===undefined)x.doneDate=(x.status==='done'?'':'');});
-    if(r.status==='hold')r.status='in_progress';   // 보류 제거 → 진행중
+    if(r.status==='hold')r.status='in_progress';
     if(r.completedDate===undefined)r.completedDate=(r.status==='done'?'':'');
   });
   return d;
 }
-function save(){localStorage.setItem(STORE,JSON.stringify(data));}
+
+// Firebase 실시간 동기화 리스너 등록
+dbRef.on('value', (snapshot) => {
+  const val = snapshot.val();
+  if (val) {
+    data = migrate(val);
+  } else {
+    // 최초 데이터가 없을 때의 초기 모형 저장 및 초기화
+    data = {
+      team:[
+        {id:'S',initial:'S',name:'S'},{id:'N',initial:'N',name:'N'},
+        {id:'K',initial:'K',name:'K'},{id:'M',initial:'M',name:'M'},{id:'B',initial:'B',name:'B'}
+      ],
+      requests:[
+        {id:uid(),title:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX)',requester:'N',
+         reqDate:'2026-02-24',dueDate:'2026-03-06',file:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX) February 24, 2026.pdf',
+         status:'in_progress',note:'',
+         reviewers:[{id:'S',status:'done'},{id:'K',status:'in_progress'}],
+         externals:[{id:uid(),role:'pm',name:'홍길동',reqDate:'2026-02-25',feedbackDate:'2026-03-03'}]},
+        {id:uid(),title:'FX Calibration Guide 개정안',requester:'S',
+         reqDate:'2026-03-01',dueDate:'',file:'',status:'in_progress',note:'',
+         reviewers:[{id:'M',status:'in_progress'}],
+         externals:[{id:uid(),role:'dev',name:'개발2팀',reqDate:'2026-03-02',feedbackDate:''}]}
+      ]
+    };
+    save();
+  }
+  render();
+});
+
+function save(){
+  dbRef.set(data);
+}
 function uid(){return 'r'+Math.random().toString(36).slice(2,9);}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function esc(s){return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
@@ -847,7 +880,6 @@ document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));});
 
 applyTheme((function(){try{return localStorage.getItem('rtTheme')||'light';}catch(e){return 'light';}})());
-render();
 </script>
 </body>
 </html>
