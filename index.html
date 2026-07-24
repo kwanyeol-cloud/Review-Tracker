@@ -520,7 +520,7 @@ function shareToTeams(id){
   window.location.href = appUrl;
 }
 
-function extStatus(e){return e.feedbackDate?'done':'in_progress';}
+function extStatus(e){return e.feedbackDate?'done':'pending';}
 function md(iso){if(!iso)return '';const p=(''+iso).split('-');return p.length===3?(parseInt(p[1],10)+'/'+parseInt(p[2],10)):iso;}
 
 /* 완료는 자동으로 되지 않음 — 대기/진행중만 활동에 따라 자동 표시, 완료는 수동 지정(status==='done')일 때만 유지 */
@@ -528,6 +528,7 @@ function autoStatus(req){
   if(req.status==='done')return 'done';
   const parts=[...(req.reviewers||[]).map(r=>r.status),...(req.externals||[]).map(extStatus)];
   if(parts.length===0)return req.status||'pending';
+  // 내부 리뷰어 상태가 'in_progress'이거나 완료된 것('done')이 있는 경우, 혹은 외부 피드백 완료(done)가 있는 경우 진행중으로 표시
   if(parts.some(s=>s==='in_progress'||s==='done'))return 'in_progress';
   return 'pending';
 }
