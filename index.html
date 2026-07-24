@@ -818,6 +818,9 @@ function addExtRow(){extDraft.push({id:uid(),role:'dev',name:'',reqDate:document
 function saveRequest(){
   const title=document.getElementById('fTitle').value.trim();
   if(!title){alert('문서 제목을 입력하세요.');return;}
+  const reqId = document.getElementById('editId').value;
+  const existing = reqId ? data.requests.find(x=>x.id===reqId) : null;
+  
   const obj={
     title,requester:document.getElementById('fRequester').value,
     status:document.getElementById('fReqStatus').value,
@@ -825,15 +828,22 @@ function saveRequest(){
     dueDate:document.getElementById('fDueDate').value,
     file:document.getElementById('fFile').value.trim(),
     note:document.getElementById('fNote').value.trim(),
-    externals:extDraft.filter(e=>(e.name||'').trim()||e.reqDate||e.feedbackDate)
+    externals:extDraft.filter(e=>(e.name||'').trim()||e.reqDate||e.feedbackDate),
+    reviewers: existing ? (existing.reviewers || []) : []
   };
-  const id=document.getElementById('editId').value;
-  const existing=id?data.requests.find(x=>x.id===id):null;
+
   // 완료 수동 지정 시 완료일 기록 / 해제 시 제거
   if(obj.status==='done')obj.completedDate=(existing&&existing.completedDate)||todayISO();
   else obj.completedDate='';
-  if(existing)Object.assign(existing,obj);
-  else{obj.id=uid();obj.reviewers=[];data.requests.unshift(obj);}
+
+  if(existing) {
+    Object.assign(existing,obj);
+    existing.status = autoStatus(existing); // 갱신된 리뷰어 기반 상태 자동 재연산
+  } else {
+    obj.id=uid();
+    obj.status = autoStatus(obj);
+    data.requests.unshift(obj);
+  }
   save();closeModal('reqOverlay');render();
 }
 function deleteCurrent(){
