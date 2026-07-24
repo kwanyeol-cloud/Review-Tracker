@@ -576,7 +576,6 @@ function render(){
   const statsList=currentTab==='all'?list:list.filter(r=>involves(r,currentTab));
   renderStats(statsList);
   renderContent(list);
-  save();
 }
 
 function renderStats(list){
