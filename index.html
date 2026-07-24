@@ -740,13 +740,13 @@ function joinReview(reqId){
     r.reviewers.push({id:currentTab,status:'in_progress',acceptedDate:todayISO(),doneDate:''});
     toast('리뷰를 수락했습니다 ('+md(todayISO())+')');
   }
-  render();
+  save();
 }
 function leaveReview(reqId){
   const r=data.requests.find(x=>x.id===reqId);if(!r)return;
   if(confirm('이 리뷰에서 빠질까요? (내 진행 상태가 삭제됩니다)')){
     r.reviewers=(r.reviewers||[]).filter(x=>x.id!==currentTab);
-    render();
+    save();
   }
 }
 
