@@ -92,6 +92,15 @@
   .stat.ext{background:linear-gradient(135deg,rgba(99,102,241,.13),rgba(0,162,232,.10))}
   .stat.ext .n{color:var(--ext)}
   [data-theme="dark"] .stat.ext .n{color:#818cf8}
+  
+  /* Toggle buttons inside stats */
+  .stat-toggle{display:flex;flex-direction:column;gap:6px;height:100%;justify-content:center}
+  .stat-toggle .title{font-size:11px;font-weight:700;color:var(--muted);margin-bottom:2px}
+  .stat-toggle .btn-group{display:flex;background:var(--input-bg);border:1px solid var(--input-border);border-radius:var(--r-md);padding:2px;gap:2px}
+  .stat-toggle button{padding:6px 10px;font-size:11.5px;font-weight:700;border-radius:var(--r-sm);color:var(--sub);background:transparent;flex:1;justify-content:center;transition:var(--tr)}
+  .stat-toggle button:hover{color:var(--brand-light)}
+  .stat-toggle button.active{background:var(--card-solid);color:var(--brand-deep);box-shadow:var(--shadow-sm)}
+  [data-theme="dark"] .stat-toggle button.active{color:#fff}
 
   /* Toolbar */
   .toolbar{background:var(--card);border:1px solid var(--border-card);border-radius:var(--r-lg);padding:14px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;box-shadow:var(--shadow);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);margin-bottom:16px}
@@ -412,6 +421,7 @@ const dbRef = database.ref('reviewTracker');
 
 let data = { team: [], requests: [] };
 let currentTab='all';
+let personalMode='in_progress'; // 'requested' (요청한 리뷰) 또는 'in_progress' (진행 중인 리뷰)
 
 /* ---------- theme ---------- */
 function applyTheme(t){
@@ -546,7 +556,11 @@ function renderTabs(){
   }).join('');
   el.innerHTML=html;
 }
-function setTab(t){currentTab=t;render();}
+function setTab(t){
+  currentTab=t;
+  personalMode='in_progress'; // 탭 전환 시 항상 리뷰 진행(기본값)으로 리셋
+  render();
+}
 
 /* ---------- render ---------- */
 function render(){
@@ -573,10 +587,17 @@ function render(){
     return (b.reqDate||'').localeCompare(a.reqDate||'');
   });
 
-  // 전체 탭에서는 전체 목록을, 개인 탭에서는 본인이 '리뷰어로 참여 중(수락)'인 문서 기준의 통계만 산정하도록 수정
-  const statsList = currentTab === 'all' 
-    ? list 
-    : list.filter(r => (r.reviewers || []).some(x => x.id === currentTab));
+  // 전체 탭에서는 전체 목록을 통계로, 개인 탭에서는 토글 상태(personalMode)에 따라 통계를 분기 계산
+  let statsList = [];
+  if (currentTab === 'all') {
+    statsList = list;
+  } else {
+    if (personalMode === 'requested') {
+      statsList = list.filter(r => r.requester === currentTab);
+    } else {
+      statsList = list.filter(r => (r.reviewers || []).some(x => x.id === currentTab));
+    }
+  }
   
   renderStats(statsList);
   renderContent(list);
@@ -585,18 +606,44 @@ function render(){
 function renderStats(list){
   const c={total:list.length,prog:0,done:0,pending:0};
   list.forEach(r=>{const s=r.status;if(s==='done')c.done++;else if(s==='pending')c.pending++;else c.prog++;});
-  let doneDays=[],waiting=0;
-  list.forEach(r=>(r.externals||[]).forEach(e=>{
-    if(e.feedbackDate){const d=days(e.reqDate||r.reqDate,e.feedbackDate);if(d!=null)doneDays.push(d);}
-    else waiting++;
-  }));
-  const avg=doneDays.length?Math.round(doneDays.reduce((a,b)=>a+b,0)/doneDays.length):null;
+  
+  let fifthCardHtml = '';
+  if (currentTab === 'all') {
+    let doneDays=[],waiting=0;
+    data.requests.forEach(r=>(r.externals||[]).forEach(e=>{
+      if(e.feedbackDate){const d=days(e.reqDate||r.reqDate,e.feedbackDate);if(d!=null)doneDays.push(d);}
+      else waiting++;
+    }));
+    const avg=doneDays.length?Math.round(doneDays.reduce((a,b)=>a+b,0)/doneDays.length):null;
+    fifthCardHtml = `
+      <div class="stat ext">
+        <div class="n">${avg!=null?avg+'일':'—'}</div>
+        <div class="l">외부 평균 피드백 소요</div>
+        <div class="sub">완료 ${doneDays.length}건 · 대기 ${waiting}건</div>
+      </div>`;
+  } else {
+    fifthCardHtml = `
+      <div class="stat" style="display:flex; align-items:center; justify-content:center;">
+        <div class="stat-toggle" style="width:100%;">
+          <div class="title">개인 통계 보기 기준</div>
+          <div class="btn-group">
+            <button class="${personalMode === 'in_progress' ? 'active' : ''}" onclick="setPersonalMode('in_progress')">📥 리뷰 진행</button>
+            <button class="${personalMode === 'requested' ? 'active' : ''}" onclick="setPersonalMode('requested')">📤 리뷰 요청</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
   document.getElementById('stats').innerHTML=`
-    <div class="stat total"><div class="n">${c.total}</div><div class="l">전체 요청</div></div>
+    <div class="stat total"><div class="n">${c.total}</div><div class="l">${personalMode === 'requested' && currentTab !== 'all' ? '요청한 리뷰' : '진행중인 리뷰'}</div></div>
     <div class="stat prog"><div class="n">${c.prog}</div><div class="l">진행중</div></div>
     <div class="stat done"><div class="n">${c.done}</div><div class="l">완료</div></div>
     <div class="stat pending"><div class="n">${c.pending}</div><div class="l">대기</div></div>
-    <div class="stat ext"><div class="n">${avg!=null?avg+'일':'—'}</div><div class="l">외부 평균 피드백 소요</div><div class="sub">완료 ${doneDays.length}건 · 대기 ${waiting}건</div></div>`;
+    ${fifthCardHtml}`;
+}
+function setPersonalMode(mode){
+  personalMode = mode;
+  render();
 }
 
 const THEAD=`<thead><tr>
