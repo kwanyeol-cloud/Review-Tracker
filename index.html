@@ -429,6 +429,49 @@
   </div>
 </div>
 
+<!-- External Reviewer Edit modal -->
+<div class="overlay" id="extEditOverlay">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-head">
+      <h2>외부 리뷰어 정보 수정</h2>
+      <button class="close-x" onclick="closeModal('extEditOverlay')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="extEditReqId">
+      <input type="hidden" id="extEditId">
+      <div class="field">
+        <label>역할</label>
+        <select id="extEditRole">
+          <option value="dev">개발자</option>
+          <option value="pm">PM</option>
+          <option value="etc">기타</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>이름 / 팀 *</label>
+        <input type="text" id="extEditName" placeholder="이름/팀 (예: 홍길동, 개발2팀)">
+      </div>
+      <div class="grid2">
+        <div class="field">
+          <label>요청일</label>
+          <input type="date" id="extEditReqDate">
+        </div>
+        <div class="field">
+          <label>피드백 받은 날 (완료 시)</label>
+          <input type="date" id="extEditFeedbackDate">
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn-danger btn-sm" onclick="deleteExternalFromEdit()">🗑 삭제</button>
+      <div style="display:flex;gap:8px;margin-left:auto">
+        <button class="btn-light" onclick="closeModal('extEditOverlay')">취소</button>
+        <button class="btn-primary" onclick="saveExternalEdit()">저장</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORE='reviewTracker.v2';
 const STATUS_LABEL={pending:'대기',in_progress:'진행중',done:'완료'};
@@ -469,6 +512,7 @@ function migrate(d){
   d.requests=d.requests||[];
   d.requests.forEach(r=>{
     r.externals=r.externals||[];
+    r.externals.forEach(e=>{if(!e.id)e.id=uid();});
     r.reviewers=(r.reviewers||[]).filter(x=>d.team.some(t=>t.id===x.id));
     r.reviewers.forEach(x=>{if(x.acceptedDate===undefined)x.acceptedDate='';if(x.doneDate===undefined)x.doneDate=(x.status==='done'?'':'');});
     if(r.status==='hold')r.status='in_progress';
@@ -750,7 +794,7 @@ function rowHtml(r,mode){
           let turn,cls;
           if(e.feedbackDate){const d=days(rq,e.feedbackDate);turn=(d!=null?d+'일 소요':'완료');cls='done';}
           else{const el=days(rq,todayISO());if(el==null){turn='대기';cls='wait';}else{turn='D+'+el;cls=el>7?'late':'wait';}}
-          return `<span class="ext-chip">
+          return `<span class="ext-chip" style="cursor:pointer" onclick="openExternalEdit('${r.id}','${e.id}')" title="클릭하여 외부 리뷰어 정보 수정">
             <span class="who"><b>${esc(EXT_ROLE[e.role]||'외부')}</b><small>${esc(e.name||'')}</small></span>
             <span class="turn ${cls}">${turn}</span></span>`;
         }).join('')+`</div>`
@@ -1040,6 +1084,59 @@ function importData(e){
 }
 
 function closeModal(id){document.getElementById(id).classList.remove('show');}
+
+/* ---------- external edit ---------- */
+function openExternalEdit(reqId, extId){
+  const r = data.requests.find(x=>x.id===reqId); if(!r) return;
+  const e = (r.externals||[]).find(x=>x.id===extId); if(!e) return;
+  
+  document.getElementById('extEditReqId').value = reqId;
+  document.getElementById('extEditId').value = extId;
+  document.getElementById('extEditRole').value = e.role || 'dev';
+  document.getElementById('extEditName').value = e.name || '';
+  document.getElementById('extEditReqDate').value = e.reqDate || r.reqDate || '';
+  document.getElementById('extEditFeedbackDate').value = e.feedbackDate || '';
+  
+  document.getElementById('extEditOverlay').classList.add('show');
+}
+
+function saveExternalEdit(){
+  const reqId = document.getElementById('extEditReqId').value;
+  const extId = document.getElementById('extEditId').value;
+  
+  const r = data.requests.find(x=>x.id===reqId); if(!r) return;
+  const e = (r.externals||[]).find(x=>x.id===extId); if(!e) return;
+  
+  const name = document.getElementById('extEditName').value.trim();
+  if(!name){ alert('이름/팀을 입력하세요.'); return; }
+  
+  e.role = document.getElementById('extEditRole').value;
+  e.name = name;
+  e.reqDate = document.getElementById('extEditReqDate').value;
+  e.feedbackDate = document.getElementById('extEditFeedbackDate').value;
+  
+  r.status = autoStatus(r); // 전체 상태 자동 갱신
+  
+  save();
+  closeModal('extEditOverlay');
+  render();
+  toast('외부 리뷰어 정보가 수정되었습니다');
+}
+
+function deleteExternalFromEdit(){
+  const reqId = document.getElementById('extEditReqId').value;
+  const extId = document.getElementById('extEditId').value;
+  
+  const r = data.requests.find(x=>x.id===reqId); if(!r) return;
+  if(confirm('이 외부 리뷰어를 삭제할까요?')){
+    r.externals = (r.externals||[]).filter(x=>x.id!==extId);
+    r.status = autoStatus(r);
+    save();
+    closeModal('extEditOverlay');
+    render();
+    toast('외부 리뷰어가 삭제되었습니다');
+  }
+}
 document.querySelectorAll('.overlay').forEach(o=>o.addEventListener('click',e=>{if(e.target===o)o.classList.remove('show');}));
 document.addEventListener('keydown',e=>{if(e.key==='Escape')document.querySelectorAll('.overlay').forEach(o=>o.classList.remove('show'));});
 
