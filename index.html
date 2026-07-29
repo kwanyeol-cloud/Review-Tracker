@@ -685,9 +685,12 @@ firebase.initializeApp(firebaseConfig);
 const database = firebase.database();
 const dbRef = database.ref('reviewTracker');
 
+const auth = firebase.auth();
 let data = { team: [], requests: [] };
 let currentTab='all';
 let personalMode='in_progress'; // 'requested' (요청한 리뷰) 또는 'in_progress' (진행 중인 리뷰)
+let currentUser = null;
+let dbListenerActive = false;
 
 /* ---------- theme ---------- */
 function applyTheme(t){
@@ -711,37 +714,197 @@ function migrate(d){
   return d;
 }
 
-// Firebase 실시간 동기화 리스너 등록
-dbRef.on('value', (snapshot) => {
-  const val = snapshot.val();
-  if (val) {
-    data = migrate(val);
+// Authentication Logic
+auth.onAuthStateChanged((user) => {
+  if (user) {
+    currentUser = user;
+    // Check allowedUsers
+    database.ref('allowedUsers/' + user.uid).once('value').then((snap) => {
+      if (snap.exists() && snap.val() === true) {
+        document.getElementById('authOverlay').style.display = 'none';
+        startDatabaseListener();
+        checkAdminBanner(user.email);
+      } else {
+        // Not approved
+        auth.signOut();
+        showAuthError('signup', '승인 대기 중입니다. 관리자(kwanyeol.baek)의 승인 후에 이용해 주세요.');
+        toggleAuthForm(true);
+        // Show status message in signup card
+        const statusBox = document.getElementById('signupStatusBox');
+        statusBox.style.display = 'block';
+        statusBox.innerHTML = `현재 계정(<b>${esc(user.email)}</b>)은 승인 대기 상태입니다. 관리자가 가입을 승인할 때까지 기다려 주세요.`;
+      }
+    });
   } else {
-    // 최초 데이터가 없을 때의 초기 모형 저장 및 초기화
-    data = {
-      team:[
-        {id:'S',initial:'S',name:'S'},{id:'N',initial:'N',name:'N'},
-        {id:'K',initial:'K',name:'K'},{id:'M',initial:'M',name:'M'},{id:'B',initial:'B',name:'B'}
-      ],
-      requests:[
-        {id:uid(),title:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX)',requester:'N',
-         reqDate:'2026-02-24',dueDate:'2026-03-06',file:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX) February 24, 2026.pdf',
-         status:'in_progress',note:'',
-         reviewers:[{id:'S',status:'done'},{id:'K',status:'in_progress'}],
-         externals:[{id:uid(),role:'pm',name:'홍길동',reqDate:'2026-02-25',feedbackDate:'2026-03-03'}]},
-        {id:uid(),title:'FX Calibration Guide 개정안',requester:'S',
-         reqDate:'2026-03-01',dueDate:'',file:'',status:'in_progress',note:'',
-         reviewers:[{id:'M',status:'in_progress'}],
-         externals:[{id:uid(),role:'dev',name:'개발2팀',reqDate:'2026-03-02',feedbackDate:''}]}
-      ]
-    };
-    save();
+    currentUser = null;
+    document.getElementById('authOverlay').style.display = 'flex';
+    // Detach listener if active
+    if (dbListenerActive) {
+      dbRef.off();
+      dbListenerActive = false;
+    }
   }
-  render();
 });
 
+function startDatabaseListener() {
+  if (dbListenerActive) return;
+  dbListenerActive = true;
+  dbRef.on('value', (snapshot) => {
+    const val = snapshot.val();
+    if (val) {
+      data = migrate(val);
+    } else {
+      // 최초 데이터가 없을 때의 초기 모형 저장 및 초기화
+      data = {
+        team:[
+          {id:'S',initial:'S',name:'S'},{id:'N',initial:'N',name:'N'},
+          {id:'K',initial:'K',name:'K'},{id:'M',initial:'M',name:'M'},{id:'B',initial:'B',name:'B'}
+        ],
+        requests:[
+          {id:uid(),title:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX)',requester:'N',
+           reqDate:'2026-02-24',dueDate:'2026-03-06',file:'SMSFX-UM1-B5.00-EN (SmartScan 2.0 RTM 6 for FX) February 24, 2026.pdf',
+           status:'in_progress',note:'',
+           reviewers:[{id:'S',status:'done'},{id:'K',status:'in_progress'}],
+           externals:[{id:uid(),role:'pm',name:'홍길동',reqDate:'2026-02-25',feedbackDate:'2026-03-03'}]},
+          {id:uid(),title:'FX Calibration Guide 개정안',requester:'S',
+           reqDate:'2026-03-01',dueDate:'',file:'',status:'in_progress',note:'',
+           reviewers:[{id:'M',status:'in_progress'}],
+           externals:[{id:uid(),role:'dev',name:'개발2팀',reqDate:'2026-03-02',feedbackDate:''}]}
+        ]
+      };
+      save();
+    }
+    render();
+  });
+}
+
+function checkAdminBanner(email) {
+  const adminBanner = document.getElementById('adminApprovalBanner');
+  if (email === 'kwanyeol.baek@parksystems.com') {
+    adminBanner.style.display = 'block';
+    // listen to pendingUsers list
+    database.ref('pendingUsers').on('value', (snapshot) => {
+      const listEl = document.getElementById('approvalList');
+      listEl.innerHTML = '';
+      const val = snapshot.val();
+      if (val) {
+        let hasItems = false;
+        for (let uid in val) {
+          hasItems = true;
+          const userEmail = val[uid];
+          const div = document.createElement('div');
+          div.className = 'approval-item';
+          div.innerHTML = `
+            <span class="email">${esc(userEmail)}</span>
+            <div class="actions">
+              <button class="btn-primary btn-sm" onclick="approveUser('${uid}', '${esc(userEmail)}')">승인</button>
+              <button class="btn-danger btn-sm" onclick="rejectUser('${uid}')">거절</button>
+            </div>
+          `;
+          listEl.appendChild(div);
+        }
+        if (!hasItems) {
+          listEl.innerHTML = '<div class="hint">대기 중인 회원가입 요청이 없습니다.</div>';
+        }
+      } else {
+        listEl.innerHTML = '<div class="hint">대기 중인 회원가입 요청이 없습니다.</div>';
+      }
+    });
+  } else {
+    adminBanner.style.display = 'none';
+  }
+}
+
+function approveUser(userUid, userEmail) {
+  // Add to allowedUsers
+  database.ref('allowedUsers/' + userUid).set(true).then(() => {
+    // Remove from pendingUsers
+    database.ref('pendingUsers/' + userUid).remove();
+    toast(`${userEmail} 님의 가입을 승인했습니다.`);
+  }).catch((err) => {
+    toast('승인 실패: ' + err.message, 'error');
+  });
+}
+
+function rejectUser(userUid) {
+  if (confirm('이 사용자의 가입 요청을 거절하시겠습니까?')) {
+    database.ref('pendingUsers/' + userUid).remove().then(() => {
+      toast('가입 요청을 거절했습니다.');
+    });
+  }
+}
+
+function toggleAuthForm(isSignup) {
+  document.getElementById('loginForm').style.display = isSignup ? 'none' : 'block';
+  document.getElementById('signupForm').style.display = isSignup ? 'block' : 'none';
+  clearAuthErrors();
+}
+
+function focusPassword(id) {
+  document.getElementById(id).focus();
+}
+
+function clearAuthErrors() {
+  document.getElementById('loginError').textContent = '';
+  document.getElementById('signupError').textContent = '';
+  document.getElementById('signupStatusBox').style.display = 'none';
+}
+
+function showAuthError(type, msg) {
+  document.getElementById(type + 'Error').textContent = msg;
+}
+
+function handleLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass = document.getElementById('loginPassword').value;
+  clearAuthErrors();
+
+  if (!email.endsWith('@parksystems.com')) {
+    showAuthError('login', '회사 이메일(@parksystems.com) 계정만 사용할 수 있습니다.');
+    return;
+  }
+
+  auth.signInWithEmailAndPassword(email, pass).catch((err) => {
+    let msg = '로그인 실패: 이메일 또는 비밀번호를 확인하세요.';
+    if (err.code === 'auth/user-not-found') msg = '등록되지 않은 이메일입니다.';
+    else if (err.code === 'auth/wrong-password') msg = '비밀번호가 올바르지 않습니다.';
+    showAuthError('login', msg);
+  });
+}
+
+function handleSignup() {
+  const email = document.getElementById('signupEmail').value.trim();
+  const pass = document.getElementById('signupPassword').value;
+  clearAuthErrors();
+
+  if (!email.endsWith('@parksystems.com')) {
+    showAuthError('signup', '회사 이메일(@parksystems.com) 계정만 사용할 수 있습니다.');
+    return;
+  }
+  if (pass.length < 6) {
+    showAuthError('signup', '비밀번호는 최소 6자리 이상이어야 합니다.');
+    return;
+  }
+
+  auth.createUserWithEmailAndPassword(email, pass).then((cred) => {
+    // Add to pendingUsers
+    database.ref('pendingUsers/' + cred.user.uid).set(email).then(() => {
+      auth.signOut(); // Sign out until approved
+      const statusBox = document.getElementById('signupStatusBox');
+      statusBox.style.display = 'block';
+      statusBox.innerHTML = `성공적으로 가입 요청을 전송했습니다. 관리자가 승인할 때까지 기다려 주세요.`;
+    });
+  }).catch((err) => {
+    let msg = '가입 요청 실패: ' + err.message;
+    if (err.code === 'auth/email-already-in-use') msg = '이미 가입 요청되었거나 등록된 이메일입니다.';
+    showAuthError('signup', msg);
+  });
+}
+
 function save(){
-  dbRef.set(data);
+  if (currentUser) {
+    dbRef.set(data);
+  }
 }
 function uid(){return 'r'+Math.random().toString(36).slice(2,9);}
 function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
