@@ -406,44 +406,44 @@
 <!-- Authentication Overlay (Option B: Force Sign In/Up with Approval) -->
 <div id="authOverlay">
   <div class="auth-card" id="loginForm">
-    <h2>회사 이메일 로그인</h2>
-    <p>리뷰 현황 트래커는 회사 이메일(@parksystems.com) 전용 서비스입니다.</p>
+    <h2>User Login</h2>
+    <p>Welcome to the Review Tracker</p>
     
     <div class="field">
-      <label>이메일 주소</label>
+      <label>Email Address</label>
       <input type="email" id="loginEmail" placeholder="user@parksystems.com" onkeydown="if(event.key==='Enter')focusPassword('loginPassword')">
     </div>
     <div class="field">
-      <label>비밀번호</label>
+      <label>Password</label>
       <input type="password" id="loginPassword" placeholder="••••••••" onkeydown="if(event.key==='Enter')handleLogin()">
     </div>
     <div class="auth-error" id="loginError"></div>
-    <button class="btn-primary" onclick="handleLogin()">로그인</button>
+    <button class="btn-primary" onclick="handleLogin()">Login</button>
     
     <div class="auth-switch">
-      계정이 없으신가요? <a onclick="toggleAuthForm(true)">인증 요청(회원가입) 하기</a>
+      Don't have an account? <a onclick="toggleAuthForm(true)">Create New Account</a>
     </div>
   </div>
 
   <div class="auth-card" id="signupForm" style="display: none;">
-    <h2>사용 권한 신청</h2>
-    <p>회사 이메일(@parksystems.com)로 가입 요청을 보냅니다.<br>관리자(kwanyeol.baek)의 승인 후 활성화됩니다.</p>
+    <h2>Create New Account</h2>
+    <p>Use your @parksystems.com email.<br>Password must be at least 6 characters.</p>
     
     <div class="field">
-      <label>이메일 주소</label>
+      <label>Email Address</label>
       <input type="email" id="signupEmail" placeholder="user@parksystems.com" onkeydown="if(event.key==='Enter')focusPassword('signupPassword')">
     </div>
     <div class="field">
-      <label>비밀번호</label>
-      <input type="password" id="signupPassword" placeholder="비밀번호 설정" onkeydown="if(event.key==='Enter')handleSignup()">
+      <label>Password</label>
+      <input type="password" id="signupPassword" placeholder="Set Password" onkeydown="if(event.key==='Enter')handleSignup()">
     </div>
     <div class="auth-error" id="signupError"></div>
-    <button class="btn-primary" onclick="handleSignup()">가입 요청 전송</button>
+    <button class="btn-primary" onclick="handleSignup()">Send Approval Request</button>
     
     <div class="auth-status-box" id="signupStatusBox"></div>
     
     <div class="auth-switch">
-      이미 계정이 있으신가요? <a onclick="toggleAuthForm(false)">로그인하기</a>
+      Already have an account? <a onclick="toggleAuthForm(false)">Login</a>
     </div>
   </div>
 </div>
@@ -728,12 +728,12 @@ auth.onAuthStateChanged((user) => {
       } else {
         // Not approved
         auth.signOut();
-        showAuthError('signup', '승인 대기 중입니다. 관리자(kwanyeol.baek)의 승인 후에 이용해 주세요.');
+        showAuthError('signup', 'Your account is pending approval. Please contact the administrator.');
         toggleAuthForm(true);
         // Show status message in signup card
         const statusBox = document.getElementById('signupStatusBox');
         statusBox.style.display = 'block';
-        statusBox.innerHTML = `현재 계정(<b>${esc(user.email)}</b>)은 승인 대기 상태입니다. 관리자가 가입을 승인할 때까지 기다려 주세요.`;
+        statusBox.innerHTML = `Your email (<b>${esc(user.email)}</b>) is currently pending admin approval.`;
       }
     });
   } else {
@@ -861,14 +861,14 @@ function handleLogin() {
   clearAuthErrors();
 
   if (!email.endsWith('@parksystems.com')) {
-    showAuthError('login', '회사 이메일(@parksystems.com) 계정만 사용할 수 있습니다.');
+    showAuthError('login', 'Only corporate emails (@parksystems.com) are allowed.');
     return;
   }
 
   auth.signInWithEmailAndPassword(email, pass).catch((err) => {
-    let msg = '로그인 실패: 이메일 또는 비밀번호를 확인하세요.';
-    if (err.code === 'auth/user-not-found') msg = '등록되지 않은 이메일입니다.';
-    else if (err.code === 'auth/wrong-password') msg = '비밀번호가 올바르지 않습니다.';
+    let msg = 'Login failed: Please check your email or password.';
+    if (err.code === 'auth/user-not-found') msg = 'This email is not registered.';
+    else if (err.code === 'auth/wrong-password') msg = 'Incorrect password.';
     showAuthError('login', msg);
   });
 }
@@ -879,11 +879,11 @@ function handleSignup() {
   clearAuthErrors();
 
   if (!email.endsWith('@parksystems.com')) {
-    showAuthError('signup', '회사 이메일(@parksystems.com) 계정만 사용할 수 있습니다.');
+    showAuthError('signup', 'Only corporate emails (@parksystems.com) are allowed.');
     return;
   }
   if (pass.length < 6) {
-    showAuthError('signup', '비밀번호는 최소 6자리 이상이어야 합니다.');
+    showAuthError('signup', 'Password must be at least 6 characters.');
     return;
   }
 
@@ -893,19 +893,25 @@ function handleSignup() {
       auth.signOut(); // Sign out until approved
       const statusBox = document.getElementById('signupStatusBox');
       statusBox.style.display = 'block';
-      statusBox.innerHTML = `성공적으로 가입 요청을 전송했습니다. 관리자가 승인할 때까지 기다려 주세요.`;
+      statusBox.innerHTML = `Your request has been sent successfully. Please wait for admin approval.`;
     });
   }).catch((err) => {
-    let msg = '가입 요청 실패: ' + err.message;
-    if (err.code === 'auth/email-already-in-use') msg = '이미 가입 요청되었거나 등록된 이메일입니다.';
+    let msg = 'Registration failed: ' + err.message;
+    if (err.code === 'auth/email-already-in-use') msg = 'This email is already in use or pending approval.';
     showAuthError('signup', msg);
   });
 }
 
 function handleLogout() {
-  if (confirm('로그아웃 하시겠습니까?')) {
+  if (confirm('Are you sure you want to log out?')) {
     auth.signOut().then(() => {
-      toast('로그아웃 되었습니다.');
+      // Clear input fields
+      document.getElementById('loginEmail').value = '';
+      document.getElementById('loginPassword').value = '';
+      document.getElementById('signupEmail').value = '';
+      document.getElementById('signupPassword').value = '';
+      clearAuthErrors();
+      toast('Logged out successfully.');
     });
   }
 }
