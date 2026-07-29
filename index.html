@@ -468,6 +468,7 @@
       <button class="btn-ghost btn-sm" onclick="exportData()">⬇ 백업</button>
       <button class="btn-ghost btn-sm" onclick="document.getElementById('importFile').click()">⬆ 가져오기</button>
       <input type="file" id="importFile" accept="application/json" onchange="importData(event)">
+      <button class="btn-ghost btn-sm" onclick="handleLogout()">로그아웃</button>
       <button class="btn-primary" onclick="openRequest()">＋ 리뷰 요청 추가</button>
     </div>
   </header>
@@ -899,6 +900,14 @@ function handleSignup() {
     if (err.code === 'auth/email-already-in-use') msg = '이미 가입 요청되었거나 등록된 이메일입니다.';
     showAuthError('signup', msg);
   });
+}
+
+function handleLogout() {
+  if (confirm('로그아웃 하시겠습니까?')) {
+    auth.signOut().then(() => {
+      toast('로그아웃 되었습니다.');
+    });
+  }
 }
 
 function save(){
