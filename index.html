@@ -465,8 +465,8 @@
     <div class="top-actions">
       <button class="control-btn" onclick="toggleTheme()" title="다크 / 라이트 전환"><span id="themeIcon">☀️</span></button>
       <button class="btn-ghost btn-sm" onclick="openTeamSettings()">👥 팀원 설정</button>
-      <button class="btn-ghost btn-sm" onclick="exportData()">⬇ 백업</button>
-      <button class="btn-ghost btn-sm" onclick="document.getElementById('importFile').click()">⬆ 가져오기</button>
+      <button class="btn-ghost btn-sm" id="btnExport" onclick="exportData()" style="display: none;">⬇ 백업</button>
+      <button class="btn-ghost btn-sm" id="btnImport" onclick="document.getElementById('importFile').click()" style="display: none;">⬆ 가져오기</button>
       <input type="file" id="importFile" accept="application/json" onchange="importData(event)">
       <button class="btn-ghost btn-sm" onclick="handleLogout()">로그아웃</button>
       <button class="btn-primary" onclick="openRequest()">＋ 리뷰 요청 추가</button>
@@ -781,8 +781,12 @@ function startDatabaseListener() {
 
 function checkAdminBanner(email) {
   const adminBanner = document.getElementById('adminApprovalBanner');
+  const btnExport = document.getElementById('btnExport');
+  const btnImport = document.getElementById('btnImport');
   if (email === 'kwanyeol.baek@parksystems.com') {
     adminBanner.style.display = 'block';
+    if (btnExport) btnExport.style.display = 'inline-block';
+    if (btnImport) btnImport.style.display = 'inline-block';
     // listen to pendingUsers list
     database.ref('pendingUsers').on('value', (snapshot) => {
       const listEl = document.getElementById('approvalList');
@@ -813,6 +817,8 @@ function checkAdminBanner(email) {
     });
   } else {
     adminBanner.style.display = 'none';
+    if (btnExport) btnExport.style.display = 'none';
+    if (btnImport) btnImport.style.display = 'none';
   }
 }
 
