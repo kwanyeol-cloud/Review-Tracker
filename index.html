@@ -687,6 +687,9 @@ const database = firebase.database();
 const dbRef = database.ref('reviewTracker');
 
 const auth = firebase.auth();
+auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).catch((err) => {
+  console.error("Auth persistence error:", err);
+});
 let data = { team: [], requests: [] };
 let currentTab='all';
 let personalMode='in_progress'; // 'requested' (요청한 리뷰) 또는 'in_progress' (진행 중인 리뷰)
@@ -871,7 +874,9 @@ function handleLogin() {
     return;
   }
 
-  auth.signInWithEmailAndPassword(email, pass).catch((err) => {
+  auth.setPersistence(firebase.auth.Auth.Persistence.SESSION).then(() => {
+    return auth.signInWithEmailAndPassword(email, pass);
+  }).catch((err) => {
     let msg = 'Login failed: Please check your email or password.';
     if (err.code === 'auth/user-not-found') msg = 'This email is not registered.';
     else if (err.code === 'auth/wrong-password') msg = 'Incorrect password.';
